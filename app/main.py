@@ -67,13 +67,34 @@ def get_task(task_id: int):
 
 @app.put("/tasks/{task_id}")
 def update_task(task_id: int, updated_task: Task):
-    for task in tasks:
-        if task["id"] == task_id:
-            task["title"] = updated_task.title
-            task["completed"] = updated_task.completed
-            return task
+    connection = get_connection()
+    cursor = connection.cursor()
 
-    raise HTTPException(status_code=404, detail="Task not found")
+    cursor.execute(
+        """
+        UPDATE tasks
+        SET title = %s, completed = %s
+        WHERE id = %s
+        RETURNING id, title, completed
+        """,
+        (updated_task.title, updated_task.completed, task_id)
+    )
+
+    task = cursor.fetchone()
+
+    connection.commit()
+
+    cursor.close()
+    connection.close()
+
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return {
+        "id": task[0],
+        "title": task[1],
+        "completed": task[2]
+    }
 
 
 @app.delete("/tasks/{task_id}")
