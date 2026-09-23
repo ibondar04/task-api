@@ -3,12 +3,14 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-
+# Defines the data a client must send when creating or updating a task.
 class Task(BaseModel):
     title: str
     completed: bool = False
 
 
+# Temporary in-memory storage.
+# This will later be replaced with PostgreSQL.
 tasks = []
 
 
@@ -44,6 +46,7 @@ def update_task(task_id: int, updated_task: Task):
 
 @app.post("/tasks")
 def create_task(task: Task):
+    # Generate a simple ID based on the current number of tasks.
     new_task = {
         "id": len(tasks) + 1,
         "title": task.title,
