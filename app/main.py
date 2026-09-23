@@ -42,11 +42,27 @@ def get_tasks():
 
 @app.get("/tasks/{task_id}")
 def get_task(task_id: int):
-    for task in tasks:
-        if task["id"] == task_id:
-            return task
+    connection = get_connection()
+    cursor = connection.cursor()
 
-    raise HTTPException(status_code=404, detail="Task not found")
+    cursor.execute(
+        "SELECT id, title, completed FROM tasks WHERE id = %s",
+        (task_id,)
+    )
+
+    task = cursor.fetchone()
+
+    cursor.close()
+    connection.close()
+
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return {
+        "id": task[0],
+        "title": task[1],
+        "completed": task[2]
+    }
 
 
 @app.put("/tasks/{task_id}")
