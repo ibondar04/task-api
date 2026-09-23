@@ -1,8 +1,12 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from app.database import get_connection
+from pwdlib import PasswordHash
+
 
 app = FastAPI()
+
+password_hash = PasswordHash.recommended()
 
 
 # Defines the data a client must send when creating or updating a task.
@@ -11,9 +15,9 @@ class Task(BaseModel):
     completed: bool = False
 
 
-# Temporary in-memory storage.
-# This will later be replaced with PostgreSQL.
-tasks = []
+class User(BaseModel):
+    username: str
+    password: str
 
 
 @app.get("/")
@@ -145,4 +149,33 @@ def create_task(task: Task):
         "id": new_task[0],
         "title": new_task[1],
         "completed": new_task[2]
+    }
+
+
+@app.post("/users")
+def create_user(user: User):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    # Store a hash instead of the plain-text password.
+    hashed_password = password_hash.hash(user.password)
+    cursor.execute(
+        """
+        INSERT INTO users (username, password_hash)
+        VALUES (%s, %s)
+        RETURNING id, username
+        """,
+        (user.username, hashed_password)
+    )
+
+    new_user = cursor.fetchone()
+
+    connection.commit()
+
+    cursor.close()
+    connection.close()
+
+    return {
+        "id": new_user[0],
+        "username": new_user[1]
     }
