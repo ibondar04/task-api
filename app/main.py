@@ -1,7 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from app.database import get_connection
 
 app = FastAPI()
+
 
 # Defines the data a client must send when creating or updating a task.
 class Task(BaseModel):
@@ -21,6 +23,20 @@ def root():
 
 @app.get("/tasks")
 def get_tasks():
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("SELECT id, title, completed FROM tasks")
+    rows = cursor.fetchall()
+
+    cursor.close()
+    connection.close()
+
+    tasks = [
+        {"id": row[0], "title": row[1], "completed": row[2]}
+        for row in rows
+    ]
+
     return {"tasks": tasks}
 
 
