@@ -24,5 +24,11 @@ def get_tasks():
 
 @app.post("/tasks")
 def create_task(task: Task):
-    tasks.append(task)
-    return task
+    new_task = {
+        "id": len(tasks) + 1,
+        "title": task.title,
+        "completed": task.completed
+    }
+
+    tasks.append(new_task)
+    return new_task
