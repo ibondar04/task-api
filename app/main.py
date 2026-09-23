@@ -72,12 +72,27 @@ def delete_task(task_id: int):
 
 @app.post("/tasks")
 def create_task(task: Task):
-    # Generate a simple ID based on the current number of tasks.
-    new_task = {
-        "id": len(tasks) + 1,
-        "title": task.title,
-        "completed": task.completed
-    }
+    connection = get_connection()
+    cursor = connection.cursor()
 
-    tasks.append(new_task)
-    return new_task
+    cursor.execute(
+        """
+        INSERT INTO tasks (title, completed)
+        VALUES (%s, %s)
+        RETURNING id, title, completed
+        """,
+        (task.title, task.completed)
+    )
+
+    new_task = cursor.fetchone()
+
+    connection.commit()
+
+    cursor.close()
+    connection.close()
+
+    return {
+        "id": new_task[0],
+        "title": new_task[1],
+        "completed": new_task[2]
+    }
