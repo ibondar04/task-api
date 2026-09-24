@@ -2,11 +2,29 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from app.database import get_connection
 from pwdlib import PasswordHash
+from datetime import datetime, timedelta, timezone
+import jwt
 
 
 app = FastAPI()
 
 password_hash = PasswordHash.recommended()
+
+SECRET_KEY = "change-this-later"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+
+    to_encode.update({"exp": expire})
+
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 # Defines the data a client must send when creating or updating a task.
@@ -16,6 +34,11 @@ class Task(BaseModel):
 
 
 class User(BaseModel):
+    username: str
+    password: str
+
+
+class LoginRequest(BaseModel):
     username: str
     password: str
 
@@ -178,4 +201,35 @@ def create_user(user: User):
     return {
         "id": new_user[0],
         "username": new_user[1]
+    }
+
+
+@app.post("/login")
+def login(login_data: LoginRequest):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        "SELECT id, username, password_hash FROM users WHERE username = %s",
+        (login_data.username,)
+    )
+
+    user = cursor.fetchone()
+
+    cursor.close()
+    connection.close()
+
+    if user is None:
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+
+    if not password_hash.verify(login_data.password, user[2]):
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+
+    access_token = create_access_token(
+        {"sub": user[1]}
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
     }
