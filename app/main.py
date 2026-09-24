@@ -1,10 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from app.database import get_connection
 from pwdlib import PasswordHash
 from datetime import datetime, timedelta, timezone
 import jwt
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 app = FastAPI()
 
@@ -13,6 +15,20 @@ password_hash = PasswordHash.recommended()
 SECRET_KEY = "change-this-later"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+
+        if username is None:
+            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
+        return username
+
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
 
 def create_access_token(data: dict):
@@ -34,11 +50,6 @@ class Task(BaseModel):
 
 
 class User(BaseModel):
-    username: str
-    password: str
-
-
-class LoginRequest(BaseModel):
     username: str
     password: str
 
@@ -205,13 +216,13 @@ def create_user(user: User):
 
 
 @app.post("/login")
-def login(login_data: LoginRequest):
+def login(form_data: OAuth2PasswordRequestForm = Depends()):
     connection = get_connection()
     cursor = connection.cursor()
 
     cursor.execute(
         "SELECT id, username, password_hash FROM users WHERE username = %s",
-        (login_data.username,)
+        (form_data.username,)
     )
 
     user = cursor.fetchone()
@@ -220,10 +231,16 @@ def login(login_data: LoginRequest):
     connection.close()
 
     if user is None:
-        raise HTTPException(status_code=401, detail="Incorrect username or password")
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password"
+        )
 
-    if not password_hash.verify(login_data.password, user[2]):
-        raise HTTPException(status_code=401, detail="Incorrect username or password")
+    if not password_hash.verify(form_data.password, user[2]):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password"
+        )
 
     access_token = create_access_token(
         {"sub": user[1]}
@@ -233,3 +250,8 @@ def login(login_data: LoginRequest):
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+
+@app.get("/users/me")
+def get_me(current_user: str = Depends(get_current_user)):
+    return {"username": current_user}
