@@ -95,13 +95,28 @@ def get_tasks(current_user: str = Depends(get_current_user)):
 
 
 @app.get("/tasks/{task_id}")
-def get_task(task_id: int):
+def get_task(
+    task_id: int,
+    current_user: str = Depends(get_current_user)
+):
     connection = get_connection()
     cursor = connection.cursor()
 
+    # Find the database ID of the logged-in user.
     cursor.execute(
-        "SELECT id, title, completed FROM tasks WHERE id = %s",
-        (task_id,)
+        "SELECT id FROM users WHERE username = %s",
+        (current_user,)
+    )
+
+    user = cursor.fetchone()
+
+    cursor.execute(
+        """
+        SELECT id, title, completed
+        FROM tasks
+        WHERE id = %s AND user_id = %s
+        """,
+        (task_id, user[0])
     )
 
     task = cursor.fetchone()
@@ -120,18 +135,35 @@ def get_task(task_id: int):
 
 
 @app.put("/tasks/{task_id}")
-def update_task(task_id: int, updated_task: Task):
+def update_task(
+    task_id: int,
+    updated_task: Task,
+    current_user: str = Depends(get_current_user)
+):
     connection = get_connection()
     cursor = connection.cursor()
+
+    # Find the database ID of the logged-in user.
+    cursor.execute(
+        "SELECT id FROM users WHERE username = %s",
+        (current_user,)
+    )
+
+    user = cursor.fetchone()
 
     cursor.execute(
         """
         UPDATE tasks
         SET title = %s, completed = %s
-        WHERE id = %s
+        WHERE id = %s AND user_id = %s
         RETURNING id, title, completed
         """,
-        (updated_task.title, updated_task.completed, task_id)
+        (
+            updated_task.title,
+            updated_task.completed,
+            task_id,
+            user[0]
+        )
     )
 
     task = cursor.fetchone()
@@ -152,13 +184,28 @@ def update_task(task_id: int, updated_task: Task):
 
 
 @app.delete("/tasks/{task_id}")
-def delete_task(task_id: int):
+def delete_task(
+    task_id: int,
+    current_user: str = Depends(get_current_user)
+):
     connection = get_connection()
     cursor = connection.cursor()
 
+    # Find the database ID of the logged-in user.
     cursor.execute(
-        "DELETE FROM tasks WHERE id = %s RETURNING id",
-        (task_id,)
+        "SELECT id FROM users WHERE username = %s",
+        (current_user,)
+    )
+
+    user = cursor.fetchone()
+
+    cursor.execute(
+        """
+        DELETE FROM tasks
+        WHERE id = %s AND user_id = %s
+        RETURNING id
+        """,
+        (task_id, user[0])
     )
 
     deleted_task = cursor.fetchone()
