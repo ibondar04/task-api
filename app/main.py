@@ -60,7 +60,10 @@ def root():
 
 
 @app.get("/tasks")
-def get_tasks(current_user: str = Depends(get_current_user)):
+def get_tasks(
+    completed: bool | None = None,
+    current_user: str = Depends(get_current_user)
+):
     connection = get_connection()
     cursor = connection.cursor()
 
@@ -72,14 +75,24 @@ def get_tasks(current_user: str = Depends(get_current_user)):
 
     user = cursor.fetchone()
 
-    cursor.execute(
-        """
-        SELECT id, title, completed
-        FROM tasks
-        WHERE user_id = %s
-        """,
-        (user[0],)
-    )
+    if completed is None:
+        cursor.execute(
+            """
+            SELECT id, title, completed
+            FROM tasks
+            WHERE user_id = %s
+            """,
+            (user[0],)
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT id, title, completed
+            FROM tasks
+            WHERE user_id = %s AND completed = %s
+            """,
+            (user[0], completed)
+        )
 
     rows = cursor.fetchall()
 
