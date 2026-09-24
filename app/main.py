@@ -280,8 +280,26 @@ def create_user(user: User):
     connection = get_connection()
     cursor = connection.cursor()
 
+    # Check whether the username is already taken.
+    cursor.execute(
+        "SELECT id FROM users WHERE username = %s",
+        (user.username,)
+    )
+
+    existing_user = cursor.fetchone()
+
+    if existing_user is not None:
+        cursor.close()
+        connection.close()
+
+        raise HTTPException(
+            status_code=409,
+            detail="Username already exists"
+        )
+
     # Store a hash instead of the plain-text password.
     hashed_password = password_hash.hash(user.password)
+
     cursor.execute(
         """
         INSERT INTO users (username, password_hash)
