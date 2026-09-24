@@ -60,11 +60,27 @@ def root():
 
 
 @app.get("/tasks")
-def get_tasks():
+def get_tasks(current_user: str = Depends(get_current_user)):
     connection = get_connection()
     cursor = connection.cursor()
 
-    cursor.execute("SELECT id, title, completed FROM tasks")
+    # Find the database ID of the logged-in user.
+    cursor.execute(
+        "SELECT id FROM users WHERE username = %s",
+        (current_user,)
+    )
+
+    user = cursor.fetchone()
+
+    cursor.execute(
+        """
+        SELECT id, title, completed
+        FROM tasks
+        WHERE user_id = %s
+        """,
+        (user[0],)
+    )
+
     rows = cursor.fetchall()
 
     cursor.close()
@@ -159,17 +175,25 @@ def delete_task(task_id: int):
 
 
 @app.post("/tasks")
-def create_task(task: Task):
+def create_task(task: Task, current_user: str = Depends(get_current_user)):
     connection = get_connection()
     cursor = connection.cursor()
 
+    # Get the database ID of the logged-in user.
+    cursor.execute(
+        "SELECT id FROM users WHERE username = %s",
+        (current_user,)
+    )
+
+    user = cursor.fetchone()
+
     cursor.execute(
         """
-        INSERT INTO tasks (title, completed)
-        VALUES (%s, %s)
+        INSERT INTO tasks (title, completed, user_id)
+        VALUES (%s, %s, %s)
         RETURNING id, title, completed
         """,
-        (task.title, task.completed)
+        (task.title, task.completed, user[0])
     )
 
     new_task = cursor.fetchone()
